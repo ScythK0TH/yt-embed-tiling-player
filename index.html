@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Floating YouTube Embed - Smooth Transition</title>
+  <style>
+    :root{
+      --accent:#ff3b3b;
+      --bg:#0b0b0f;
+      --panel:#111217;
+      --glass: rgba(255,255,255,0.03);
+      --text:#e6e6e9;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial}
+
+    /* The video fills the viewport */
+    .player-wrap{
+      position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;z-index:1;overflow:hidden;
+    }
+    .player-wrap iframe{
+      width:100vw;height:100vh;border:0;display:block;
+    }
+
+    /* Floating input panel WRAPPER 
+       Change: Positioned at bottom 0 with padding to create a "dock" area
+    */
+    .float-wrap{
+      position:fixed;left:0;width:100%;bottom:0;
+      z-index:5;
+      display:flex; justify-content:center; align-items:flex-end;
+      padding-bottom: 30px; /* Distance from bottom when active */
+      pointer-events:none; /* Let clicks pass through empty space */
+    }
+
+    /* The Panel itself 
+       Change: Added transform transition and pointer-events
+    */
+    .float-panel{
+      display:flex;align-items:center;gap:10px;padding:10px 14px;
+      border-radius:999px;
+      background:linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02));
+      backdrop-filter:blur(10px);
+      box-shadow:0 6px 24px rgba(0,0,0,0.5);
+      border:1px solid rgba(255,255,255,0.08);
+      
+      max-width:520px;min-width:44px;
+      pointer-events:auto; /* Re-enable clicks on the panel itself */
+      
+      /* The "Beautiful" Transition */
+      transform: translateY(0) scale(1);
+      opacity: 1;
+      transition: 
+        min-width 400ms cubic-bezier(0.2, 0.8, 0.2, 1),
+        padding 400ms ease,
+        transform 500ms cubic-bezier(0.34, 1.56, 0.64, 1), /* Bouncy effect */
+        opacity 400ms ease,
+        border-radius 400ms ease;
+      
+      overflow:hidden;
+    }
+
+    /* COLLAPSED STATE
+       Change: Moves down (TranslateY) and fades out slightly
+    */
+    .float-panel.collapsed{
+      min-width:44px;
+      padding:8px;
+      border-radius:50%;
+      cursor:pointer;
+      
+      /* Slide down effect */
+      transform: translateY(120%) scale(0.9); /* Move down and shrink a bit */
+      opacity: 0.4; /* Dim it so it's not distracting */
+      box-shadow: none; /* Remove shadow when hidden */
+    }
+    
+    /* Hovering the collapsed element brings it back slightly visually to indicate interactability */
+    .float-panel.collapsed:hover {
+      opacity: 0.8;
+      transform: translateY(110%) scale(1);
+    }
+
+    .float-panel input{
+      border:0;outline:0;background:transparent;color:var(--text);font-size:14px;width:420px;max-width:calc(100vw - 160px);
+      transition: opacity 200ms ease;
+    }
+    .float-panel.collapsed input{width:0;padding:0;margin:0;opacity:0}
+
+    .hint{
+      font-size:13px;opacity:0.75;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;
+    }
+
+    .icon{
+      width:28px;height:28px;display:inline-grid;place-items:center;border-radius:50%;background:var(--glass);border:1px solid rgba(255,255,255,0.05);
+      flex-shrink: 0;
+    }
+    .btn{cursor:pointer;border:0;background:transparent;color:var(--text);font-weight:600}
+
+    /* Help bubble */
+    .help{
+      position:fixed;left:50%;transform:translateX(-50%);bottom:90px;background:var(--panel);padding:8px 12px;border-radius:8px;font-size:13px;color:rgba(230,230,233,0.9);box-shadow:0 6px 18px rgba(2,6,23,0.6);z-index:4;display:none;
+      pointer-events: none;
+    }
+    .help.show{display:block; animation: fadeIn 0.3s ease;}
+
+    @keyframes fadeIn { from{opacity:0; transform: translate(-50%, 10px);} to{opacity:1; transform: translate(-50%, 0);} }
+
+    @media (max-width:560px){
+      .float-panel{max-width:92vw}
+      .float-panel input{max-width:calc(92vw - 120px)}
+      .help{bottom:90px}
+    }
+
+    .float-panel:focus-within{box-shadow:0 10px 30px rgba(0,0,0,0.8); border-color: rgba(255,255,255,0.2);}
+
+    .empty-msg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none}
+    .empty-msg .card{background:linear-gradient(180deg,#0f1720,#09090c);padding:18px 22px;border-radius:12px;color:rgba(230,230,233,0.9);box-shadow:0 10px 30px rgba(0,0,0,0.7);pointer-events:auto}
+
+  </style>
+</head>
+<body>
+
+  <div class="player-wrap" id="playerWrap">
+    <div style="color:#666;position:absolute;left:12px;top:12px;font-size:13px;">Paste a YouTube URL in the floating box below</div>
+  </div>
+
+  <div class="empty-msg" id="emptyMsg">
+    <div class="card">No video loaded — paste a YouTube link below to play.</div>
+  </div>
+
+  <div class="float-wrap" id="floatWrap">
+    <div class="float-panel collapsed" id="floatPanel" title="Paste a YouTube link (press Enter)">
+      <div class="icon" id="toggleIcon">▶</div>
+      <input id="ytInput" type="url" placeholder="Paste YouTube URL and press Enter" aria-label="YouTube URL input" />
+      <div class="hint" id="hint">Paste a YouTube watch URL or share link</div>
+      <button class="btn" id="clearBtn" title="Clear input" aria-label="Clear input" style="display:none">✖</button>
+    </div>
+  </div>
+
+  <div class="help" id="help">Tip: You can paste these forms: https://youtu.be/VIDEO_ID or https://www.youtube.com/watch?v=VIDEO_ID</div>
+
+  <script>
+    (function(){
+      const panel = document.getElementById('floatPanel');
+      const input = document.getElementById('ytInput');
+      const icon = document.getElementById('toggleIcon');
+      const hint = document.getElementById('hint');
+      const clearBtn = document.getElementById('clearBtn');
+      const help = document.getElementById('help');
+      const playerWrap = document.getElementById('playerWrap');
+      const emptyMsg = document.getElementById('emptyMsg');
+      const floatWrap = document.getElementById('floatWrap'); // New reference
+
+      let hideTimeout = null;
+
+      function expand(reason){
+        panel.classList.remove('collapsed');
+        panel.setAttribute('aria-expanded','true');
+        icon.textContent = '▶';
+        
+        // Only show help if focusing input
+        if(reason === 'focus') help.classList.add('show');
+        
+        clearTimeout(hideTimeout);
+      }
+      
+      function collapse(){
+        if(document.activeElement === input) return;
+        if(input.value && input.value.trim() !== '') return;
+        
+        panel.classList.add('collapsed');
+        panel.setAttribute('aria-expanded','false');
+        help.classList.remove('show');
+      }
+
+      function scheduleAutoHide(){
+        clearTimeout(hideTimeout);
+        hideTimeout = setTimeout(()=>{
+          collapse();
+        }, 2000);
+      }
+
+      // EXPAND LOGIC:
+      // Use the Wrapper to detect hover so user can easily bring it up from the bottom
+      floatWrap.addEventListener('mouseenter', ()=>{ 
+        // If mouse enters the bottom zone, expand or at least stop hiding
+        if(panel.classList.contains('collapsed')){
+          expand('hover');
+          // Optional: Don't auto focus immediately on hover to keep it chill, 
+          // just expand the UI. User clicks to type.
+        }
+      });
+
+      floatWrap.addEventListener('mouseleave', ()=>{ scheduleAutoHide(); });
+
+      // Click on panel (icon)
+      panel.addEventListener('click', (e)=>{
+        if(panel.classList.contains('collapsed')){
+          expand('click');
+          input.focus();
+        }
+      });
+
+      input.addEventListener('focus', ()=>{ expand('focus'); });
+      input.addEventListener('blur', ()=>{ scheduleAutoHide(); });
+
+      input.addEventListener('input', ()=>{
+        clearBtn.style.display = input.value.trim() ? 'inline-block' : 'none';
+      });
+
+      clearBtn.addEventListener('click', ()=>{ input.value=''; clearBtn.style.display='none'; input.focus(); });
+
+      // click outside
+      document.addEventListener('click', (e)=>{
+        if(!panel.contains(e.target) && !floatWrap.contains(e.target)) scheduleAutoHide();
+      });
+
+      // --- Youtube Parser Logic (Same as before) ---
+      function parseYouTubeId(url){
+        if(!url) return null;
+        try{
+          const idOnly = url.match(/^[a-zA-Z0-9_-]{11}$/);
+          if(idOnly) return idOnly[0];
+          const u = new URL(url, location.origin);
+          if(u.hostname.includes('youtu.be')){
+            return u.pathname.slice(1).split(/[?&]/)[0];
+          }
+          if(u.hostname.includes('youtube.com')){
+            const v = u.searchParams.get('v');
+            if(v) return v.split(/[?&]/)[0];
+            const m = u.pathname.match(/embed\/(.{11})/);
+            if(m) return m[1];
+            const m2 = u.pathname.match(/\/(?:v|shorts)\/(.{11})/);
+            if(m2) return m2[1];
+          }
+          return null;
+        }catch(err){ return null; }
+      }
+
+      function loadVideoById(id){
+        if(!id) return;
+        playerWrap.innerHTML = '';
+        const iframe = document.createElement('iframe');
+        iframe.src = `https://www.youtube.com/embed/${encodeURIComponent(id)}?rel=0&modestbranding=1&playsinline=1&autoplay=1`;
+        iframe.title = 'YouTube video player';
+        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+        iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+        iframe.allowFullscreen = true;
+        playerWrap.appendChild(iframe);
+        emptyMsg.style.display = 'none';
+      }
+
+      input.addEventListener('keydown', (e)=>{
+        if(e.key === 'Enter'){
+          e.preventDefault();
+          const val = input.value.trim();
+          const id = parseYouTubeId(val);
+          if(id){
+            loadVideoById(id);
+            input.blur(); // blur will trigger scheduleAutoHide
+          }else{
+            hint.textContent = 'Invalid Link!';
+            setTimeout(()=>hint.textContent = 'Paste a YouTube watch URL', 2000);
+          }
+        }
+      });
+      
+      document.addEventListener('keydown', (e)=>{
+        if(e.key === 'Escape' && document.activeElement === input){ input.blur(); scheduleAutoHide(); }
+      });
+
+      window.__YT_UI = {loadVideoById};
+    })();
+  </script>
+</body>
+</html>
