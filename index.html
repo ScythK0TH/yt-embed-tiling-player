@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Floating YouTube Embed - Smooth Transition</title>
+  <title>Floating YouTube Embed - Play Button</title>
   <style>
     :root{
       --accent:#ff3b3b;
@@ -22,20 +22,16 @@
       width:100vw;height:100vh;border:0;display:block;
     }
 
-    /* Floating input panel WRAPPER 
-       Change: Positioned at bottom 0 with padding to create a "dock" area
-    */
+    /* Floating input panel WRAPPER */
     .float-wrap{
       position:fixed;left:0;width:100%;bottom:0;
       z-index:5;
       display:flex; justify-content:center; align-items:flex-end;
-      padding-bottom: 30px; /* Distance from bottom when active */
-      pointer-events:none; /* Let clicks pass through empty space */
+      padding-bottom: 30px;
+      pointer-events:none;
     }
 
-    /* The Panel itself 
-       Change: Added transform transition and pointer-events
-    */
+    /* The Panel itself */
     .float-panel{
       display:flex;align-items:center;gap:10px;padding:10px 14px;
       border-radius:999px;
@@ -45,37 +41,33 @@
       border:1px solid rgba(255,255,255,0.08);
       
       max-width:520px;min-width:44px;
-      pointer-events:auto; /* Re-enable clicks on the panel itself */
+      pointer-events:auto;
       
-      /* The "Beautiful" Transition */
+      /* Smooth Transition */
       transform: translateY(0) scale(1);
       opacity: 1;
       transition: 
         min-width 400ms cubic-bezier(0.2, 0.8, 0.2, 1),
         padding 400ms ease,
-        transform 500ms cubic-bezier(0.34, 1.56, 0.64, 1), /* Bouncy effect */
+        transform 500ms cubic-bezier(0.34, 1.56, 0.64, 1),
         opacity 400ms ease,
         border-radius 400ms ease;
       
       overflow:hidden;
     }
 
-    /* COLLAPSED STATE
-       Change: Moves down (TranslateY) and fades out slightly
-    */
+    /* COLLAPSED STATE */
     .float-panel.collapsed{
       min-width:44px;
       padding:8px;
       border-radius:50%;
       cursor:pointer;
       
-      /* Slide down effect */
-      transform: translateY(120%) scale(0.9); /* Move down and shrink a bit */
-      opacity: 0.4; /* Dim it so it's not distracting */
-      box-shadow: none; /* Remove shadow when hidden */
+      transform: translateY(120%) scale(0.9);
+      opacity: 0.4;
+      box-shadow: none;
     }
     
-    /* Hovering the collapsed element brings it back slightly visually to indicate interactability */
     .float-panel.collapsed:hover {
       opacity: 0.8;
       transform: translateY(110%) scale(1);
@@ -91,13 +83,27 @@
       font-size:13px;opacity:0.75;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;
     }
 
+    /* Icon Style - Updated to look clickable */
     .icon{
-      width:28px;height:28px;display:inline-grid;place-items:center;border-radius:50%;background:var(--glass);border:1px solid rgba(255,255,255,0.05);
+      width:28px;height:28px;display:inline-grid;place-items:center;border-radius:50%;
+      background:var(--glass);border:1px solid rgba(255,255,255,0.05);
       flex-shrink: 0;
+      cursor: pointer;
+      transition: all 0.2s ease;
     }
+    /* Hover effect on the Play button */
+    .icon:hover {
+      background: rgba(255, 255, 255, 0.15);
+      transform: scale(1.1);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+    /* Active click effect */
+    .icon:active {
+      transform: scale(0.95);
+    }
+
     .btn{cursor:pointer;border:0;background:transparent;color:var(--text);font-weight:600}
 
-    /* Help bubble */
     .help{
       position:fixed;left:50%;transform:translateX(-50%);bottom:90px;background:var(--panel);padding:8px 12px;border-radius:8px;font-size:13px;color:rgba(230,230,233,0.9);box-shadow:0 6px 18px rgba(2,6,23,0.6);z-index:4;display:none;
       pointer-events: none;
@@ -130,9 +136,10 @@
   </div>
 
   <div class="float-wrap" id="floatWrap">
-    <div class="float-panel collapsed" id="floatPanel" title="Paste a YouTube link (press Enter)">
-      <div class="icon" id="toggleIcon">▶</div>
-      <input id="ytInput" type="url" placeholder="Paste YouTube URL and press Enter" aria-label="YouTube URL input" />
+    <div class="float-panel collapsed" id="floatPanel" title="Paste a YouTube link">
+      <div class="icon" id="toggleIcon" title="Click to Play">▶</div>
+      
+      <input id="ytInput" type="url" placeholder="Paste YouTube URL..." aria-label="YouTube URL input" />
       <div class="hint" id="hint">Paste a YouTube watch URL or share link</div>
       <button class="btn" id="clearBtn" title="Clear input" aria-label="Clear input" style="display:none">✖</button>
     </div>
@@ -150,18 +157,14 @@
       const help = document.getElementById('help');
       const playerWrap = document.getElementById('playerWrap');
       const emptyMsg = document.getElementById('emptyMsg');
-      const floatWrap = document.getElementById('floatWrap'); // New reference
+      const floatWrap = document.getElementById('floatWrap');
 
       let hideTimeout = null;
 
       function expand(reason){
         panel.classList.remove('collapsed');
         panel.setAttribute('aria-expanded','true');
-        icon.textContent = '▶';
-        
-        // Only show help if focusing input
         if(reason === 'focus') help.classList.add('show');
-        
         clearTimeout(hideTimeout);
       }
       
@@ -181,42 +184,7 @@
         }, 2000);
       }
 
-      // EXPAND LOGIC:
-      // Use the Wrapper to detect hover so user can easily bring it up from the bottom
-      floatWrap.addEventListener('mouseenter', ()=>{ 
-        // If mouse enters the bottom zone, expand or at least stop hiding
-        if(panel.classList.contains('collapsed')){
-          expand('hover');
-          // Optional: Don't auto focus immediately on hover to keep it chill, 
-          // just expand the UI. User clicks to type.
-        }
-      });
-
-      floatWrap.addEventListener('mouseleave', ()=>{ scheduleAutoHide(); });
-
-      // Click on panel (icon)
-      panel.addEventListener('click', (e)=>{
-        if(panel.classList.contains('collapsed')){
-          expand('click');
-          input.focus();
-        }
-      });
-
-      input.addEventListener('focus', ()=>{ expand('focus'); });
-      input.addEventListener('blur', ()=>{ scheduleAutoHide(); });
-
-      input.addEventListener('input', ()=>{
-        clearBtn.style.display = input.value.trim() ? 'inline-block' : 'none';
-      });
-
-      clearBtn.addEventListener('click', ()=>{ input.value=''; clearBtn.style.display='none'; input.focus(); });
-
-      // click outside
-      document.addEventListener('click', (e)=>{
-        if(!panel.contains(e.target) && !floatWrap.contains(e.target)) scheduleAutoHide();
-      });
-
-      // --- Youtube Parser Logic (Same as before) ---
+      // Parse YouTube ID
       function parseYouTubeId(url){
         if(!url) return null;
         try{
@@ -251,21 +219,81 @@
         emptyMsg.style.display = 'none';
       }
 
+      // *** Main Submit Logic ***
+      function submitVideo() {
+        const val = input.value.trim();
+        if(!val) {
+            input.focus();
+            return;
+        }
+        
+        const id = parseYouTubeId(val);
+        if(id){
+          loadVideoById(id);
+          input.blur(); // This will trigger auto-hide
+        }else{
+          const originalHint = hint.textContent;
+          hint.textContent = '❌ Invalid Link!';
+          hint.style.color = '#ff4b4b';
+          setTimeout(()=>{
+            hint.textContent = originalHint;
+            hint.style.color = '';
+          }, 2000);
+        }
+      }
+
+      // --- Event Listeners ---
+
+      // 1. Mouse Enter Area -> Expand
+      floatWrap.addEventListener('mouseenter', ()=>{ 
+        if(panel.classList.contains('collapsed')) expand('hover');
+      });
+      floatWrap.addEventListener('mouseleave', ()=>{ scheduleAutoHide(); });
+
+      // 2. Toggle Icon Click (The "Play" Button)
+      icon.addEventListener('click', (e)=>{
+        e.stopPropagation(); // Prevent bubbling to panel click
+        
+        if(panel.classList.contains('collapsed')){
+            // If collapsed, just expand
+            expand('click');
+            input.focus();
+        } else {
+            // If expanded, ACT AS PLAY BUTTON
+            submitVideo();
+        }
+      });
+
+      // 3. Panel Click (General area)
+      panel.addEventListener('click', (e)=>{
+        if(panel.classList.contains('collapsed')){
+          expand('click');
+          input.focus();
+        }
+      });
+
+      // 4. Enter Key
       input.addEventListener('keydown', (e)=>{
         if(e.key === 'Enter'){
           e.preventDefault();
-          const val = input.value.trim();
-          const id = parseYouTubeId(val);
-          if(id){
-            loadVideoById(id);
-            input.blur(); // blur will trigger scheduleAutoHide
-          }else{
-            hint.textContent = 'Invalid Link!';
-            setTimeout(()=>hint.textContent = 'Paste a YouTube watch URL', 2000);
-          }
+          submitVideo();
         }
       });
       
+      // Other Input events
+      input.addEventListener('focus', ()=>{ expand('focus'); });
+      input.addEventListener('blur', ()=>{ scheduleAutoHide(); });
+      input.addEventListener('input', ()=>{
+        clearBtn.style.display = input.value.trim() ? 'inline-block' : 'none';
+      });
+      clearBtn.addEventListener('click', ()=>{ input.value=''; clearBtn.style.display='none'; input.focus(); });
+
+      // Close on click outside
+      document.addEventListener('click', (e)=>{
+        if(!panel.contains(e.target) && !floatWrap.contains(e.target)) scheduleAutoHide();
+      });
+      
+      // Close on Escape
       document.addEventListener('keydown', (e)=>{
         if(e.key === 'Escape' && document.activeElement === input){ input.blur(); scheduleAutoHide(); }
       });
