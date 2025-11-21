@@ -293,9 +293,18 @@
         if(!panel.contains(e.target) && !floatWrap.contains(e.target)) scheduleAutoHide();
       });
       
-      // Close on Escape
+      // *** UPDATED: Force Hide on Escape ***
       document.addEventListener('keydown', (e)=>{
-        if(e.key === 'Escape' && document.activeElement === input){ input.blur(); scheduleAutoHide(); }
+        if(e.key === 'Escape'){ 
+          // 1. เอา Focus ออกจาก Input เพื่อป้องกันการพิมพ์ต่อ
+          input.blur(); 
+          
+          // 2. บังคับซ่อน Panel ทันที (Manual Override)
+          // เราสั่ง add class โดยตรง ไม่ผ่าน function collapse() เพื่อให้ทำงานทันทีแม้มีข้อความค้างอยู่
+          panel.classList.add('collapsed');
+          panel.setAttribute('aria-expanded','false');
+          help.classList.remove('show');
+        }
       });
 
       window.__YT_UI = {loadVideoById};
