@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Floating YouTube Embed - Play Button</title>
+  <title>Universal Floating Player</title>
   <style>
     :root{
       --accent:#ff3b3b;
@@ -83,7 +83,6 @@
       font-size:13px;opacity:0.75;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;
     }
 
-    /* Icon Style - Updated to look clickable */
     .icon{
       width:28px;height:28px;display:inline-grid;place-items:center;border-radius:50%;
       background:var(--glass);border:1px solid rgba(255,255,255,0.05);
@@ -91,13 +90,11 @@
       cursor: pointer;
       transition: all 0.2s ease;
     }
-    /* Hover effect on the Play button */
     .icon:hover {
       background: rgba(255, 255, 255, 0.15);
       transform: scale(1.1);
       border-color: rgba(255, 255, 255, 0.3);
     }
-    /* Active click effect */
     .icon:active {
       transform: scale(0.95);
     }
@@ -121,31 +118,31 @@
     .float-panel:focus-within{box-shadow:0 10px 30px rgba(0,0,0,0.8); border-color: rgba(255,255,255,0.2);}
 
     .empty-msg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none}
-    .empty-msg .card{background:linear-gradient(180deg,#0f1720,#09090c);padding:18px 22px;border-radius:12px;color:rgba(230,230,233,0.9);box-shadow:0 10px 30px rgba(0,0,0,0.7);pointer-events:auto}
+    .empty-msg .card{background:linear-gradient(180deg,#0f1720,#09090c);padding:18px 22px;border-radius:12px;color:rgba(230,230,233,0.9);box-shadow:0 10px 30px rgba(0,0,0,0.7);pointer-events:auto; text-align:center; max-width: 300px;}
 
   </style>
 </head>
 <body>
 
   <div class="player-wrap" id="playerWrap">
-    <div style="color:#666;position:absolute;left:12px;top:12px;font-size:13px;">Paste a YouTube URL in the floating box below</div>
+    <div style="color:#666;position:absolute;left:12px;top:12px;font-size:13px;">Waiting for video...</div>
   </div>
 
   <div class="empty-msg" id="emptyMsg">
-    <div class="card">No video loaded — paste a YouTube link below to play.</div>
+    <div class="card">Paste YouTube link <b>OR</b> &lt;iframe&gt; embed code below.</div>
   </div>
 
   <div class="float-wrap" id="floatWrap">
-    <div class="float-panel collapsed" id="floatPanel" title="Paste a YouTube link">
+    <div class="float-panel collapsed" id="floatPanel" title="Paste link or embed code">
       <div class="icon" id="toggleIcon" title="Click to Play">▶</div>
       
-      <input id="ytInput" type="url" placeholder="Paste YouTube URL..." aria-label="YouTube URL input" />
-      <div class="hint" id="hint">Paste a YouTube watch URL or share link</div>
+      <input id="ytInput" type="text" placeholder="Paste YouTube URL or Embed Code..." aria-label="Input" />
+      <div class="hint" id="hint">Paste Link or &lt;iframe&gt; code</div>
       <button class="btn" id="clearBtn" title="Clear input" aria-label="Clear input" style="display:none">✖</button>
     </div>
   </div>
 
-  <div class="help" id="help">Tip: You can paste these forms: https://youtu.be/VIDEO_ID or https://www.youtube.com/watch?v=VIDEO_ID</div>
+  <div class="help" id="help">Supports: YouTube Links, SharePoint Embeds, Generic &lt;iframe&gt;</div>
 
   <script>
     (function(){
@@ -179,61 +176,86 @@
 
       function scheduleAutoHide(){
         clearTimeout(hideTimeout);
-        hideTimeout = setTimeout(()=>{
-          collapse();
-        }, 2000);
+        hideTimeout = setTimeout(()=>{ collapse(); }, 2000);
       }
 
-      // Parse YouTube ID
-      function parseYouTubeId(url){
-        if(!url) return null;
-        try{
-          const idOnly = url.match(/^[a-zA-Z0-9_-]{11}$/);
-          if(idOnly) return idOnly[0];
-          const u = new URL(url, location.origin);
-          if(u.hostname.includes('youtu.be')){
-            return u.pathname.slice(1).split(/[?&]/)[0];
-          }
-          if(u.hostname.includes('youtube.com')){
-            const v = u.searchParams.get('v');
-            if(v) return v.split(/[?&]/)[0];
-            const m = u.pathname.match(/embed\/(.{11})/);
-            if(m) return m[1];
-            const m2 = u.pathname.match(/\/(?:v|shorts)\/(.{11})/);
-            if(m2) return m2[1];
-          }
-          return null;
-        }catch(err){ return null; }
+      // --- Logic: Parse Input ---
+      function parseInput(val){
+        if(!val) return null;
+
+        // 1. Try to match YouTube ID specifically (Best Experience)
+        try {
+            let ytId = null;
+            const u = new URL(val); // Check if it's a valid URL first
+            if(u.hostname.includes('youtu.be')) ytId = u.pathname.slice(1).split(/[?&]/)[0];
+            else if(u.hostname.includes('youtube.com')){
+                const v = u.searchParams.get('v');
+                if(v) ytId = v;
+                else {
+                    const m = u.pathname.match(/embed\/(.{11})/);
+                    if(m) ytId = m[1];
+                }
+            }
+            if(ytId) return { type: 'youtube', src: ytId };
+        } catch(e) { 
+            // Not a URL or not a simple URL, proceed to iframe check
+        }
+
+        // 2. Check if it is an <iframe ...> HTML string
+        if(val.trim().toLowerCase().startsWith('<iframe')){
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(val, 'text/html');
+            const iframe = doc.querySelector('iframe');
+            if(iframe && iframe.src) {
+                return { type: 'iframe', src: iframe.src };
+            }
+        }
+
+        // 3. Fallback: Assume it is a direct URL to a video source/embed
+        // Just validate it looks like a URL
+        try {
+            new URL(val);
+            return { type: 'iframe', src: val };
+        } catch(e) {
+            return null; // Invalid input
+        }
       }
 
-      function loadVideoById(id){
-        if(!id) return;
+      function loadPlayer(data){
         playerWrap.innerHTML = '';
-        const iframe = document.createElement('iframe');
-        iframe.src = `https://www.youtube.com/embed/${encodeURIComponent(id)}?rel=0&modestbranding=1&playsinline=1&autoplay=1`;
-        iframe.title = 'YouTube video player';
-        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
-        iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-        iframe.allowFullscreen = true;
-        playerWrap.appendChild(iframe);
         emptyMsg.style.display = 'none';
+        
+        const iframe = document.createElement('iframe');
+        
+        if(data.type === 'youtube'){
+             iframe.src = `https://www.youtube.com/embed/${encodeURIComponent(data.src)}?rel=0&modestbranding=1&playsinline=1&autoplay=1`;
+        } else {
+            // Generic Iframe (SharePoint, etc.)
+            iframe.src = data.src;
+        }
+
+        // Common Attributes
+        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen';
+        iframe.allowFullscreen = true;
+        iframe.setAttribute('webkitallowfullscreen', '');
+        iframe.setAttribute('mozallowfullscreen', '');
+        
+        playerWrap.appendChild(iframe);
       }
 
       // *** Main Submit Logic ***
       function submitVideo() {
         const val = input.value.trim();
-        if(!val) {
-            input.focus();
-            return;
-        }
+        if(!val) { input.focus(); return; }
         
-        const id = parseYouTubeId(val);
-        if(id){
-          loadVideoById(id);
-          input.blur(); // This will trigger auto-hide
-        }else{
+        const result = parseInput(val);
+        
+        if(result){
+          loadPlayer(result);
+          input.blur(); 
+        } else {
           const originalHint = hint.textContent;
-          hint.textContent = '❌ Invalid Link!';
+          hint.textContent = '❌ Invalid Link or Code';
           hint.style.color = '#ff4b4b';
           setTimeout(()=>{
             hint.textContent = originalHint;
@@ -243,44 +265,23 @@
       }
 
       // --- Event Listeners ---
-
-      // 1. Mouse Enter Area -> Expand
-      floatWrap.addEventListener('mouseenter', ()=>{ 
-        if(panel.classList.contains('collapsed')) expand('hover');
-      });
+      floatWrap.addEventListener('mouseenter', ()=>{ if(panel.classList.contains('collapsed')) expand('hover'); });
       floatWrap.addEventListener('mouseleave', ()=>{ scheduleAutoHide(); });
 
-      // 2. Toggle Icon Click (The "Play" Button)
       icon.addEventListener('click', (e)=>{
-        e.stopPropagation(); // Prevent bubbling to panel click
-        
-        if(panel.classList.contains('collapsed')){
-            // If collapsed, just expand
-            expand('click');
-            input.focus();
-        } else {
-            // If expanded, ACT AS PLAY BUTTON
-            submitVideo();
-        }
+        e.stopPropagation();
+        if(panel.classList.contains('collapsed')){ expand('click'); input.focus(); } 
+        else { submitVideo(); }
       });
 
-      // 3. Panel Click (General area)
       panel.addEventListener('click', (e)=>{
-        if(panel.classList.contains('collapsed')){
-          expand('click');
-          input.focus();
-        }
+        if(panel.classList.contains('collapsed')){ expand('click'); input.focus(); }
       });
 
-      // 4. Enter Key
       input.addEventListener('keydown', (e)=>{
-        if(e.key === 'Enter'){
-          e.preventDefault();
-          submitVideo();
-        }
+        if(e.key === 'Enter'){ e.preventDefault(); submitVideo(); }
       });
       
-      // Other Input events
       input.addEventListener('focus', ()=>{ expand('focus'); });
       input.addEventListener('blur', ()=>{ scheduleAutoHide(); });
       input.addEventListener('input', ()=>{
@@ -288,26 +289,20 @@
       });
       clearBtn.addEventListener('click', ()=>{ input.value=''; clearBtn.style.display='none'; input.focus(); });
 
-      // Close on click outside
       document.addEventListener('click', (e)=>{
         if(!panel.contains(e.target) && !floatWrap.contains(e.target)) scheduleAutoHide();
       });
       
-      // *** UPDATED: Force Hide on Escape ***
+      // Force Hide on Escape
       document.addEventListener('keydown', (e)=>{
         if(e.key === 'Escape'){ 
-          // 1. เอา Focus ออกจาก Input เพื่อป้องกันการพิมพ์ต่อ
           input.blur(); 
-          
-          // 2. บังคับซ่อน Panel ทันที (Manual Override)
-          // เราสั่ง add class โดยตรง ไม่ผ่าน function collapse() เพื่อให้ทำงานทันทีแม้มีข้อความค้างอยู่
           panel.classList.add('collapsed');
           panel.setAttribute('aria-expanded','false');
           help.classList.remove('show');
         }
       });
 
-      window.__YT_UI = {loadVideoById};
     })();
   </script>
 </body>
