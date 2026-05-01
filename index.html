@@ -138,7 +138,7 @@
       
       <input id="ytInput" type="text" placeholder="Paste YouTube URL or Embed Code..." aria-label="Input" />
       <div class="hint" id="hint">Paste Link or &lt;iframe&gt; code</div>
-      <button class="btn" id="clearBtn" title="Clear input" aria-label="Clear input" style="display:none">✖</button>
+      <button class="btn" id="clearBtn" title="Clear input" aria-label="Clear input" style="display:inline-block">✖</button>
     </div>
   </div>
 
@@ -284,10 +284,11 @@
       
       input.addEventListener('focus', ()=>{ expand('focus'); });
       input.addEventListener('blur', ()=>{ scheduleAutoHide(); });
-      input.addEventListener('input', ()=>{
-        clearBtn.style.display = input.value.trim() ? 'inline-block' : 'none';
+      clearBtn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        input.value = '';
+        collapse();
       });
-      clearBtn.addEventListener('click', ()=>{ input.value=''; clearBtn.style.display='none'; input.focus(); });
 
       document.addEventListener('click', (e)=>{
         if(!panel.contains(e.target) && !floatWrap.contains(e.target)) scheduleAutoHide();
